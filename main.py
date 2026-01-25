@@ -7,8 +7,6 @@ import zipfile
 import requests
 from cachetools import TTLCache
 import uuid
-import logging
-from fastapi.responses import HTMLResponse
 
 app = FastAPI(
     #    title="Vercel + FastAPI",
@@ -25,9 +23,7 @@ CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 @app.get("/")
 async def index(session_id: Annotated[uuid.UUID | None, Cookie()] = None):
     if session_id is None or sessions.get(session_id) is None:
-        html_content = f"""
-        <!doctype html>
-        """
+
         html_content = f"""
         <!DOCTYPE html>
         <html lang="en">
