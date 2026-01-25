@@ -18,7 +18,6 @@ app = FastAPI(
 
 sessions = TTLCache(maxsize=5, ttl=3600)
 
-TOKEN = os.getenv("TOKEN")
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 
@@ -97,7 +96,6 @@ def exchange_code(code):
         "client_id": CLIENT_ID,
         "client_secret": CLIENT_SECRET,
         "code": code,
-        #"repository_id": "1123738730",
     }
     headers = {"accept": "application/json"}
 
