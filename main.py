@@ -1,7 +1,7 @@
 import io
 from typing import Annotated
-from fastapi import FastAPI, Response, Cookie
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI, Response, Cookie, HTTPException
+from fastapi.responses import HTMLResponse, RedirectResponse 
 import os
 import zipfile
 import requests
@@ -56,7 +56,8 @@ async def index(session_id: Annotated[uuid.UUID | None, Cookie()] = None):
         artifacts_response = r.json()
         artifacts = artifacts_response["artifacts"]
         valid_artifacts = [artifact for artifact in artifacts if artifact["expired"] is False]
-        # TODO check that this list is non-empty
+        if not valid_artifacts:
+            raise HTTPException(status_code=404, detail="No artifacts found")
 
         latest_artifact = max(valid_artifacts, key=lambda artifact: artifact["updated_at"])
         artifact_url = latest_artifact["archive_download_url"]
