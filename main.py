@@ -53,9 +53,7 @@ async def index(session_id: Annotated[uuid.UUID | None, Cookie()] = None):
 
         r = requests.get(url, headers=headers)
         if r.status_code != 200:
-
-            # TODO
-            pass
+            raise HTTPException(502, detail="Could not get artifacts") # Bad Gateway
         artifacts_response = r.json()
         artifacts = artifacts_response["artifacts"]
         valid_artifacts = [artifact for artifact in artifacts if artifact["expired"] is False]
@@ -67,8 +65,7 @@ async def index(session_id: Annotated[uuid.UUID | None, Cookie()] = None):
 
         file_request = requests.get(artifact_url, headers=headers)
         if file_request.status_code != 200:
-            # TODO
-            pass
+            raise HTTPException(status_code=502, detail="Could not get artifact") # Bad Gateway
 
         in_memory_file = io.BytesIO(file_request.content)
 
@@ -79,6 +76,10 @@ async def index(session_id: Annotated[uuid.UUID | None, Cookie()] = None):
 
 @app.get("/github/callback")
 async def github_callback(code: str):
+
+    if not code:
+        raise HTTPException(400, detail="code must be provided") # Bad Request
+
     token_data = exchange_code(code)
     token = token_data["access_token"]
 
@@ -102,8 +103,7 @@ def exchange_code(code):
     r = requests.post("https://github.com/login/oauth/access_token", headers=headers, data=data)
 
     if r.status_code != 200:
-        # TODO
-        pass
+        raise HTTPException(502, detail="Could not exchange code for access token") # Bad Gateway
 
 
     return r.json()
