@@ -18,6 +18,9 @@ sessions = TTLCache(maxsize=5, ttl=3600)
 
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
+GITHUB_USER = os.getenv("GITHUB_USER")
+GITHUB_REPO = os.getenv("GITHUB_REPO")
+FILENAME = os.getenv("FILENAME")
 
 
 @app.get("/")
@@ -46,7 +49,7 @@ async def index(session_id: Annotated[uuid.UUID | None, Cookie()] = None):
                    "Authorization": f"Bearer {token}",
                    "X-GitHub-Api-Version": "2022-11-28"
                    }
-        url = "https://api.github.com/repos/danielschlaugies/latex-template-gh-actions/actions/artifacts"
+        url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/actions/artifacts"
 
         r = requests.get(url, headers=headers)
         if r.status_code != 200:
@@ -70,7 +73,7 @@ async def index(session_id: Annotated[uuid.UUID | None, Cookie()] = None):
         in_memory_file = io.BytesIO(file_request.content)
 
         with zipfile.ZipFile(in_memory_file) as myzip:
-            with myzip.open("main.pdf") as mypdf:
+            with myzip.open(FILENAME) as mypdf:
                 return Response(mypdf.read(), media_type="application/pdf")
 
 
