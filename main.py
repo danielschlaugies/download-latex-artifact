@@ -1,6 +1,6 @@
 import io
 from typing import Annotated
-from fastapi import FastAPI, Response, Cookie, HTTPException
+from fastapi import FastAPI, Response, Cookie, HTTPException, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse 
 import os
 import zipfile
@@ -22,9 +22,14 @@ GITHUB_USER = os.getenv("GITHUB_USER")
 GITHUB_REPO = os.getenv("GITHUB_REPO")
 FILENAME = os.getenv("FILENAME")
 
+async def get_httpx_async_client():
+    async with httpx.AsyncClient() as client:
+        yield client
+
+HttpxClientDep = Annotated[httpx.AsyncClient, Depends(get_httpx_async_client)]
 
 @app.get("/")
-async def index(session_id: Annotated[uuid.UUID | None, Cookie()] = None):
+async def index(session_id: Annotated[uuid.UUID | None, Cookie()], httpx_client: HttpxClientDep):
     if session_id is None or sessions.get(session_id) is None:
 
         html_content = f"""
@@ -51,7 +56,7 @@ async def index(session_id: Annotated[uuid.UUID | None, Cookie()] = None):
                    }
         url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/actions/artifacts"
 
-        r = httpx.get(url, headers=headers)
+        r = await httpx_client.get(url, headers=headers)
         if r.status_code != 200:
             raise HTTPException(502, detail="Could not get artifacts") # Bad Gateway
         artifacts_response = r.json()
@@ -63,7 +68,7 @@ async def index(session_id: Annotated[uuid.UUID | None, Cookie()] = None):
         latest_artifact = max(valid_artifacts, key=lambda artifact: artifact["updated_at"])
         artifact_url = latest_artifact["archive_download_url"]
 
-        file_request = httpx.get(artifact_url, headers=headers, follow_redirects=True)
+        file_request = await httpx_client.get(artifact_url, headers=headers, follow_redirects=True)
         if file_request.status_code != 200:
             raise HTTPException(status_code=502, detail="Could not get artifact") # Bad Gateway
 
@@ -75,12 +80,12 @@ async def index(session_id: Annotated[uuid.UUID | None, Cookie()] = None):
 
 
 @app.get("/github/callback")
-async def github_callback(code: str):
+async def github_callback(code: str, httpx_client: HttpxClientDep):
 
     if not code:
         raise HTTPException(400, detail="code must be provided") # Bad Request
 
-    token_data = exchange_code(code)
+    token_data = await exchange_code(code, httpx_client)
     token = token_data["access_token"]
 
     session_id = uuid.uuid4()
@@ -92,7 +97,7 @@ async def github_callback(code: str):
     return redirect
 
 
-def exchange_code(code):
+async def exchange_code(code, httpx_client: HttpxClientDep):
     data = {
         "client_id": CLIENT_ID,
         "client_secret": CLIENT_SECRET,
@@ -100,7 +105,7 @@ def exchange_code(code):
     }
     headers = {"accept": "application/json"}
 
-    r = httpx.post("https://github.com/login/oauth/access_token", headers=headers, data=data)
+    r = await httpx_client.post("https://github.com/login/oauth/access_token", headers=headers, data=data)
 
     if r.status_code != 200:
         raise HTTPException(502, detail="Could not exchange code for access token") # Bad Gateway
