@@ -5,6 +5,6 @@ requires-python = ">=3.10"
 dependencies = [
   "fastapi>=0.121.0",
   "uvicorn>=0.34.0",
-  "requests",
-  "cachetools"
+  "cachetools",
+  "httpx>=0.28.1",
 ]
