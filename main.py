@@ -97,7 +97,9 @@ async def github_callback(code: str, httpx_client: HttpxClientDep, request: Requ
         raise HTTPException(400, detail="code must be provided") # Bad Request
 
     token_data = await exchange_code(code, httpx_client)
-    token = token_data["access_token"]
+    token = token_data.get("access_token")
+    if not token:
+        raise HTTPException(502, detail="access token missing") # Bad Gateway
 
     session_id = secrets.token_urlsafe()
     sessions[session_id] = token
