@@ -4,11 +4,11 @@ Authentication is implemented by registering this application as an OAuth app.
 
 # Internals
 Initially, the user is authenticated using the [OAuth web application flow](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#web-application-flow).
-After successful authentication, the access token is stored in a time-to-live (TTL) cache, that associates a randomly generated uuid session id with the access token. The session id itself is stored in a cookie.
+After successful authentication, the access token is stored in a time-to-live (TTL) cache, that associates a randomly generated session id with the access token. The session id itself is stored in a cookie.
 In that way, the actual access token is never exposed outside of the server.
 
 The access token is then used to get a list of all artifacts of the specified repository using the corresponding [REST API endpoint](https://docs.github.com/en/rest/actions/artifacts#list-artifacts-for-a-repository).
-Afterwards, the latest artifact is downloaded on the server side, unpacked and the file with the filename `FILENAME` served to the (authenticated) user.
+Afterwards, the latest artifact is streamed on the server side, unpacked and the file with the filename `FILENAME` served to the (authenticated) user.
 
 # Configuration
 The application is configured using the following environment variables:
@@ -18,7 +18,7 @@ CLIENT_SECRET=<OAuth client secret>
 GITHUB_USER=<repository owner>
 GITHUB_REPO=<repository name>
 FILENAME=<the file to serve>
-SECRET_KEY=<the application secret key, to sign cookies, for example an URL-safe text string>
+SECRET_KEY=<the application secret key to sign cookies, for example an URL-safe text string>
 ```
 During development, these can be stored in a `.env` file.
 
@@ -51,5 +51,5 @@ uv run --env-file=.env main.py
 
 When you make changes to your project, the server will automatically reload.
 
-## Misc
+# Misc
 See my other [project](https://github.com/danielschlaugies/latex-template-gh-actions) for a possible repository to use in combination with.
