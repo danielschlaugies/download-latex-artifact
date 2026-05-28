@@ -4,7 +4,7 @@ from fastapi import FastAPI, Response, Cookie, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse 
 import os
 import zipfile
-import requests
+import httpx
 from cachetools import TTLCache
 import uuid
 
@@ -51,7 +51,7 @@ async def index(session_id: Annotated[uuid.UUID | None, Cookie()] = None):
                    }
         url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/actions/artifacts"
 
-        r = requests.get(url, headers=headers)
+        r = httpx.get(url, headers=headers)
         if r.status_code != 200:
             raise HTTPException(502, detail="Could not get artifacts") # Bad Gateway
         artifacts_response = r.json()
@@ -63,7 +63,7 @@ async def index(session_id: Annotated[uuid.UUID | None, Cookie()] = None):
         latest_artifact = max(valid_artifacts, key=lambda artifact: artifact["updated_at"])
         artifact_url = latest_artifact["archive_download_url"]
 
-        file_request = requests.get(artifact_url, headers=headers)
+        file_request = httpx.get(artifact_url, headers=headers, follow_redirects=True)
         if file_request.status_code != 200:
             raise HTTPException(status_code=502, detail="Could not get artifact") # Bad Gateway
 
@@ -100,7 +100,7 @@ def exchange_code(code):
     }
     headers = {"accept": "application/json"}
 
-    r = requests.post("https://github.com/login/oauth/access_token", headers=headers, data=data)
+    r = httpx.post("https://github.com/login/oauth/access_token", headers=headers, data=data)
 
     if r.status_code != 200:
         raise HTTPException(502, detail="Could not exchange code for access token") # Bad Gateway
