@@ -18,6 +18,7 @@ CLIENT_SECRET=<OAuth client secret>
 GITHUB_USER=<repository owner>
 GITHUB_REPO=<repository name>
 FILENAME=<the file to serve>
+SECRET_KEY=<the application secret key, to sign cookies, for example an URL-safe text string>
 ```
 During development, these can be stored in a `.env` file.
 

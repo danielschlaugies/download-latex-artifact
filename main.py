@@ -1,12 +1,20 @@
 import io
 from typing import Annotated
-from fastapi import FastAPI, Response, Cookie, HTTPException, Depends
+from fastapi import FastAPI, Response, Cookie, HTTPException, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse 
+from starlette.middleware.sessions import SessionMiddleware
 import os
 import zipfile
 import httpx
 from cachetools import TTLCache
-import uuid
+import secrets
+
+CLIENT_ID = os.getenv("CLIENT_ID")
+CLIENT_SECRET = os.getenv("CLIENT_SECRET")
+GITHUB_USER = os.getenv("GITHUB_USER")
+GITHUB_REPO = os.getenv("GITHUB_REPO")
+FILENAME = os.getenv("FILENAME")
+SECRET_KEY = os.getenv("SECRET_KEY")
 
 app = FastAPI(
     #    title="Vercel + FastAPI",
@@ -14,13 +22,9 @@ app = FastAPI(
     #    version="1.0.0",
 )
 
-sessions = TTLCache(maxsize=5, ttl=3600)
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
-CLIENT_ID = os.getenv("CLIENT_ID")
-CLIENT_SECRET = os.getenv("CLIENT_SECRET")
-GITHUB_USER = os.getenv("GITHUB_USER")
-GITHUB_REPO = os.getenv("GITHUB_REPO")
-FILENAME = os.getenv("FILENAME")
+sessions = TTLCache(maxsize=5, ttl=3600)
 
 async def get_httpx_async_client():
     async with httpx.AsyncClient() as client:
@@ -29,7 +33,8 @@ async def get_httpx_async_client():
 HttpxClientDep = Annotated[httpx.AsyncClient, Depends(get_httpx_async_client)]
 
 @app.get("/")
-async def index(session_id: Annotated[uuid.UUID | None, Cookie()], httpx_client: HttpxClientDep):
+async def index(httpx_client: HttpxClientDep, request: Request):
+    session_id = request.session.get('session_id')
     if session_id is None or sessions.get(session_id) is None:
 
         html_content = f"""
@@ -80,7 +85,7 @@ async def index(session_id: Annotated[uuid.UUID | None, Cookie()], httpx_client:
 
 
 @app.get("/github/callback")
-async def github_callback(code: str, httpx_client: HttpxClientDep):
+async def github_callback(code: str, httpx_client: HttpxClientDep, request: Request):
 
     if not code:
         raise HTTPException(400, detail="code must be provided") # Bad Request
@@ -88,11 +93,11 @@ async def github_callback(code: str, httpx_client: HttpxClientDep):
     token_data = await exchange_code(code, httpx_client)
     token = token_data["access_token"]
 
-    session_id = uuid.uuid4()
+    session_id = secrets.token_urlsafe()
     sessions[session_id] = token
 
     redirect = RedirectResponse("/")
-    redirect.set_cookie(key="session_id", value=str(session_id))
+    request.session['session_id'] = session_id
 
     return redirect
 
