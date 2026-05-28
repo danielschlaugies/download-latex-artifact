@@ -4,7 +4,7 @@ Authentication is implemented by registering this application as an OAuth app.
 
 # Internals
 Initially, the user is authenticated using the [OAuth web application flow](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#web-application-flow).
-After sucessful authentication, the access token is stored in a time-to-live (TTL) cache, that associates a randomly generated uuid session id with the access token. The session id itself is stored in a cookie.
+After successful authentication, the access token is stored in a time-to-live (TTL) cache, that associates a randomly generated uuid session id with the access token. The session id itself is stored in a cookie.
 In that way, the actual access token is never exposed outside of the server.
 
 The access token is then used to get a list of all artifacts of the specified repository using the corresponding [REST API endpoint](https://docs.github.com/en/rest/actions/artifacts#list-artifacts-for-a-repository).
@@ -19,6 +19,7 @@ GITHUB_USER=<repository owner>
 GITHUB_REPO=<repository name>
 FILENAME=<the file to serve>
 ```
+During development, these can be stored in a `.env` file.
 
 # Getting Started
 
@@ -44,10 +45,10 @@ Start the development server on http://0.0.0.0:5001
 ```bash
 python main.py
 # using uv:
-uv run main.py
+uv run --env-file=.env main.py
 ```
 
 When you make changes to your project, the server will automatically reload.
 
 ## Misc
-See my other [project](https://github.com/danielschlaugies/latex-template-gh-actions) for a possible repository to use in combination wih.
+See my other [project](https://github.com/danielschlaugies/latex-template-gh-actions) for a possible repository to use in combination with.
