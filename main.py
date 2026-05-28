@@ -104,8 +104,8 @@ async def github_callback(code: str, httpx_client: HttpxClientDep, request: Requ
     session_id = secrets.token_urlsafe()
     sessions[session_id] = token
 
-    redirect = RedirectResponse("/")
     request.session['session_id'] = session_id
+    redirect = RedirectResponse("/")
 
     return redirect
 
