@@ -1,10 +1,9 @@
-import io
-from typing import Annotated
+from typing import Annotated, Union
 from fastapi import FastAPI, Response, Cookie, HTTPException, Depends, Request
-from fastapi.responses import HTMLResponse, RedirectResponse 
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse 
 from starlette.middleware.sessions import SessionMiddleware
 import os
-import zipfile
+from stream_unzip import async_stream_unzip
 import httpx
 from cachetools import TTLCache
 import secrets
@@ -15,6 +14,8 @@ GITHUB_USER = os.getenv("GITHUB_USER")
 GITHUB_REPO = os.getenv("GITHUB_REPO")
 FILENAME = os.getenv("FILENAME")
 SECRET_KEY = os.getenv("SECRET_KEY")
+
+CHUNK_SIZE = 64 * 1024 # 64KB
 
 app = FastAPI(
     #    title="Vercel + FastAPI",
@@ -32,7 +33,10 @@ async def get_httpx_async_client():
 
 HttpxClientDep = Annotated[httpx.AsyncClient, Depends(get_httpx_async_client)]
 
-@app.get("/")
+class PdfStreamingResponse(StreamingResponse):
+    media_type = "application/pdf"
+
+@app.get("/", response_class=Union[HTMLResponse, PdfStreamingResponse])
 async def index(httpx_client: HttpxClientDep, request: Request):
     session_id = request.session.get('session_id')
     if session_id is None or sessions.get(session_id) is None:
@@ -73,15 +77,17 @@ async def index(httpx_client: HttpxClientDep, request: Request):
         latest_artifact = max(valid_artifacts, key=lambda artifact: artifact["updated_at"])
         artifact_url = latest_artifact["archive_download_url"]
 
-        file_request = await httpx_client.get(artifact_url, headers=headers, follow_redirects=True)
-        if file_request.status_code != 200:
-            raise HTTPException(status_code=502, detail="Could not get artifact") # Bad Gateway
+        async def pdf_stream(): 
+            async with httpx_client.stream('GET', artifact_url, headers=headers, follow_redirects=True) as artifact_stream_response:
+                async for file_name, file_size, unzipped_chunks in async_stream_unzip(artifact_stream_response.aiter_bytes(chunk_size=CHUNK_SIZE), chunk_size=CHUNK_SIZE):
+                    if file_name.decode("utf-8") == FILENAME:
+                        async for chunk in unzipped_chunks:
+                            yield chunk
+                        return
+            
+            raise HTTPException(404, "file could not be found")
 
-        in_memory_file = io.BytesIO(file_request.content)
-
-        with zipfile.ZipFile(in_memory_file) as myzip:
-            with myzip.open(FILENAME) as mypdf:
-                return Response(mypdf.read(), media_type="application/pdf")
+        return PdfStreamingResponse(pdf_stream())
 
 
 @app.get("/github/callback")
