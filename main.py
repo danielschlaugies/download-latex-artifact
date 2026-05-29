@@ -1,7 +1,8 @@
 from typing import Annotated, Union
-from fastapi import FastAPI, Response, Cookie, HTTPException, Depends, Request
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse 
 from starlette.middleware.sessions import SessionMiddleware
+from contextlib import asynccontextmanager
 import os
 from stream_unzip import async_stream_unzip
 import httpx
@@ -17,19 +18,24 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 
 CHUNK_SIZE = 64 * 1024 # 64KB
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with httpx.AsyncClient() as httpx_client:
+        yield {'httpx_client': httpx_client}
+
 app = FastAPI(
     #    title="Vercel + FastAPI",
     #    description="Vercel + FastAPI",
     #    version="1.0.0",
+    lifespan=lifespan
 )
 
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
 sessions = TTLCache(maxsize=5, ttl=3600)
 
-async def get_httpx_async_client():
-    async with httpx.AsyncClient() as client:
-        yield client
+async def get_httpx_async_client(request: Request):
+    return request.state.httpx_client
 
 HttpxClientDep = Annotated[httpx.AsyncClient, Depends(get_httpx_async_client)]
 
