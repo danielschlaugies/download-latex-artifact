@@ -10,4 +10,5 @@ dependencies = [
   "starlette>=1.1.0",
   "itsdangerous>=2.2.0",
   "stream-unzip>=0.0.101",
+  "redis>=8.0.0",
 ]

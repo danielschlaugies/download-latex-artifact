@@ -4,7 +4,7 @@ Authentication is implemented by registering this application as an OAuth app.
 
 # Internals
 Initially, the user is authenticated using the [OAuth web application flow](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#web-application-flow).
-After successful authentication, the access token is stored in a time-to-live (TTL) cache, that associates a randomly generated session id with the access token. The session id itself is stored in a cookie.
+After successful authentication, the access token is stored in a redis cache, that associates a randomly generated session id with the access token. The session id itself is stored in a cookie.
 In that way, the actual access token is never exposed outside of the server.
 
 The access token is then used to get a list of all artifacts of the specified repository using the corresponding [REST API endpoint](https://docs.github.com/en/rest/actions/artifacts#list-artifacts-for-a-repository).
@@ -19,6 +19,7 @@ GITHUB_USER=<repository owner>
 GITHUB_REPO=<repository name>
 FILENAME=<the file to serve>
 SECRET_KEY=<the application secret key to sign cookies, for example an URL-safe text string>
+REDIS_URL=<redis url and configuration>
 ```
 During development, these can be stored in a `.env` file.
 
@@ -40,6 +41,11 @@ uv sync
 
 
 ## Running Locally
+
+Start a local redis instance on docker by running the command:
+```
+docker run --name some-redis -p 6379:6379 -d redis
+```
 
 Start the development server on http://0.0.0.0:5001
 

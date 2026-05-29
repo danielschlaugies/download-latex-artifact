@@ -3,11 +3,17 @@ from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse 
 from starlette.middleware.sessions import SessionMiddleware
 from contextlib import asynccontextmanager
+import redis.asyncio as redis
 import os
 from stream_unzip import async_stream_unzip
 import httpx
-from cachetools import TTLCache
+#from cachetools import TTLCache
 import secrets
+# import logging
+
+# logging.basicConfig(
+#     level=logging.DEBUG
+# )
 
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
@@ -15,13 +21,18 @@ GITHUB_USER = os.getenv("GITHUB_USER")
 GITHUB_REPO = os.getenv("GITHUB_REPO")
 FILENAME = os.getenv("FILENAME")
 SECRET_KEY = os.getenv("SECRET_KEY")
+REDIS_URL = os.getenv("REDIS_URL")
 
 CHUNK_SIZE = 64 * 1024 # 64KB
+# TODO might set that to the actual GitHub OAuth access token expire time 
+EXPIRE = 60 * 60 # redis expire flag in seconds, i.e. 1 hour
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with httpx.AsyncClient() as httpx_client:
-        yield {'httpx_client': httpx_client}
+        redis_client = redis.Redis.from_url(REDIS_URL)
+        yield {'httpx_client': httpx_client, 'redis_client': redis_client}
+        await redis_client.aclose()
 
 app = FastAPI(
     #    title="Vercel + FastAPI",
@@ -32,20 +43,25 @@ app = FastAPI(
 
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
-sessions = TTLCache(maxsize=5, ttl=3600)
+# sessions = TTLCache(maxsize=5, ttl=3600)
 
 async def get_httpx_async_client(request: Request):
     return request.state.httpx_client
 
 HttpxClientDep = Annotated[httpx.AsyncClient, Depends(get_httpx_async_client)]
 
+async def get_redis_client(request: Request):
+    return request.state.redis_client
+
+RedisClientDep = Annotated[redis.Redis, Depends(get_redis_client)]
+
 class PdfStreamingResponse(StreamingResponse):
     media_type = "application/pdf"
 
 @app.get("/", response_class=Union[HTMLResponse, PdfStreamingResponse])
-async def index(httpx_client: HttpxClientDep, request: Request):
+async def index(httpx_client: HttpxClientDep, redis_client: RedisClientDep, request: Request):
     session_id = request.session.get('session_id')
-    if session_id is None or sessions.get(session_id) is None:
+    if session_id is None or (token := await redis_client.get(session_id)) is None:
 
         html_content = f"""
         <!DOCTYPE html>
@@ -63,10 +79,8 @@ async def index(httpx_client: HttpxClientDep, request: Request):
 
     else:
 
-        token = sessions[session_id]
-
         headers = {"Accept": "application/vnd.github+json",
-                   "Authorization": f"Bearer {token}",
+                   "Authorization": f"Bearer {token.decode("utf-8")}",
                    "X-GitHub-Api-Version": "2022-11-28"
                    }
         url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/actions/artifacts"
@@ -97,7 +111,7 @@ async def index(httpx_client: HttpxClientDep, request: Request):
 
 
 @app.get("/github/callback")
-async def github_callback(code: str, httpx_client: HttpxClientDep, request: Request):
+async def github_callback(code: str, httpx_client: HttpxClientDep, redis_client: RedisClientDep, request: Request):
 
     if not code:
         raise HTTPException(400, detail="code must be provided") # Bad Request
@@ -108,13 +122,11 @@ async def github_callback(code: str, httpx_client: HttpxClientDep, request: Requ
         raise HTTPException(502, detail="access token missing") # Bad Gateway
 
     session_id = secrets.token_urlsafe()
-    sessions[session_id] = token
+    # TODO check that is completes sucessful
+    await redis_client.set(session_id, token, ex=EXPIRE)
 
     request.session['session_id'] = session_id
-    redirect = RedirectResponse("/")
-
-    return redirect
-
+    return RedirectResponse("/")
 
 async def exchange_code(code, httpx_client: HttpxClientDep):
     data = {
