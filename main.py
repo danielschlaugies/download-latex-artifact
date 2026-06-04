@@ -25,7 +25,7 @@ REDIS_URL = os.getenv("REDIS_URL")
 
 CHUNK_SIZE = 64 * 1024 # 64KB
 # TODO might set that to the actual GitHub OAuth access token expire time 
-EXPIRE = 60 * 60 # redis expire flag in seconds, i.e. 1 hour
+EXPIRE = 8 * 60 * 60 # redis expire flag in seconds, i.e. 8 hours
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -58,7 +58,7 @@ RedisClientDep = Annotated[redis.Redis, Depends(get_redis_client)]
 class PdfStreamingResponse(StreamingResponse):
     media_type = "application/pdf"
 
-@app.get("/", response_class=Union[HTMLResponse, PdfStreamingResponse])
+@app.get("/", response_class=Union[HTMLResponse, PdfStreamingResponse, RedirectResponse])
 async def index(httpx_client: HttpxClientDep, redis_client: RedisClientDep, request: Request):
     session_id = request.session.get('session_id')
     if session_id is None or (token := await redis_client.get(session_id)) is None:
@@ -89,8 +89,17 @@ async def index(httpx_client: HttpxClientDep, redis_client: RedisClientDep, requ
         url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/actions/artifacts"
 
         r = await httpx_client.get(url, headers=headers)
+
+        # session present in redis, but GitHub says Bad credentials
+        # invalidate redis session and redirect to login
+        if r.status_code == 401:
+            await redis_client.delete(session_id)
+            return RedirectResponse("/")
+
+
         if r.status_code != 200:
             raise HTTPException(502, detail="Could not get artifacts") # Bad Gateway
+
         artifacts_response = r.json()
         artifacts = artifacts_response["artifacts"]
         valid_artifacts = [artifact for artifact in artifacts if artifact["expired"] is False]
