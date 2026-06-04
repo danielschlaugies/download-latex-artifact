@@ -63,6 +63,9 @@ async def index(httpx_client: HttpxClientDep, redis_client: RedisClientDep, requ
     session_id = request.session.get('session_id')
     if session_id is None or (token := await redis_client.get(session_id)) is None:
 
+        state_token = secrets.token_urlsafe()
+        request.session['oauth_state'] = state_token
+
         html_content = f"""
         <!DOCTYPE html>
         <html lang="en">
@@ -70,7 +73,7 @@ async def index(httpx_client: HttpxClientDep, redis_client: RedisClientDep, requ
         <meta charset="utf-8"> 
         </head>
         <body>
-            <a href="https://github.com/login/oauth/authorize?client_id={CLIENT_ID}&scope=repo">Login with GitHub</a>
+            <a href="https://github.com/login/oauth/authorize?client_id={CLIENT_ID}&scope=repo&state={state_token}">Login with GitHub</a>
         </body>
         </html>
         """
@@ -111,10 +114,24 @@ async def index(httpx_client: HttpxClientDep, redis_client: RedisClientDep, requ
 
 
 @app.get("/github/callback")
-async def github_callback(code: str, httpx_client: HttpxClientDep, redis_client: RedisClientDep, request: Request):
+async def github_callback(code: str, state: str, httpx_client: HttpxClientDep, redis_client: RedisClientDep, request: Request):
+
+    if not state:
+        raise HTTPException(400, detail="state must be provided") # Bad Request
+
+    expected_state = request.session.get('oauth_state')
+
+    if not expected_state:
+        raise HTTPException(400, detail="oauth state token missing") # Bad Request
+
+    if expected_state != state:
+        raise HTTPException(400, detail="invalid oauth state token") # Bad Request
+
+    request.session.pop('oauth_state')
 
     if not code:
         raise HTTPException(400, detail="code must be provided") # Bad Request
+
 
     token_data = await exchange_code(code, httpx_client)
     token = token_data.get("access_token")
